@@ -1,0 +1,21 @@
+Metadata-Version: 1.1
+Name: kubed
+Version: 0.3.0
+Summary: An opinionated wrapper around kubernetes api
+Home-page: https://github.com/telephoneorg/kubed
+Author: Joe Black
+Author-email: me@joeblack.nyc
+License: Apache 2.0
+Download-URL: https://github.com/telephoneorg/kubed/tarball/0.3.0
+Description-Content-Type: UNKNOWN
+Description: UNKNOWN
+Keywords: kubernetes,clustering,templating
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: OS Independent
+Classifier: Natural Language :: English
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Topic :: System :: Clustering
