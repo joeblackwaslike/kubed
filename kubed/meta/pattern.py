@@ -33,7 +33,8 @@ class Singleton(type):
 class WrappedAttrs:
     def __getattribute__(self, name):
         try:
-            if all([name is not '_wrapped', not name.startswith('__')]):
+            if all([name != '_wrapped', not name.startswith('__')]):
+            # if not name.startswith('_'):
                 return object.__getattribute__(self._wrapped, name)
         except AttributeError:
             pass
@@ -41,11 +42,13 @@ class WrappedAttrs:
 
     def __hasattr__(self, name):
         if all([name is not '_wrapped', not name.startswith('__')]):
+        # if not name.startswith('_'):
             return hasattr(self._wrapped, name)
         return object.__hasattr__(self, name)
 
     def __setattr__(self, name, value):
         if all([name is not '_wrapped', not name.startswith('__')]):
+        # if not name.startswith('_'):
             return setattr(self._wrapped, name, value)
         return object.__setattr__(self, name, value)
 
@@ -89,3 +92,20 @@ class Proxy(WrappedAttrs, WrappedMap):
 
     def __isinstance__(self, *args, **kwargs):
         return self._wrapped.__isinstance__(self, *args, **kwargs)
+
+
+class AttrDict(dict):
+    """
+    A class to convert a nested Dictionary into an object with key-values
+    that are accessible using attribute notation (AttrDict.attribute) instead of
+    key notation (Dict["key"]). This class recursively sets Dicts to objects,
+    allowing you to recurse down nested dicts (like: AttrDict.attr.attr)
+    """
+
+    def __init__(self, iterable, **kwargs):
+        super(AttrDict, self).__init__(iterable, **kwargs)
+        for key, value in iterable.items():
+            if isinstance(value, dict):
+                self.__dict__[key] = AttrDict(value)
+            else:
+                self.__dict__[key] = value

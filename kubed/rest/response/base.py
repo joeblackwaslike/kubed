@@ -1,3 +1,5 @@
+import urllib3
+
 from . import transforms
 from ..constants import TRANSFORMS_DEFAULT
 from ...exceptions import NoPodsFoundError
@@ -6,8 +8,8 @@ from ...exceptions import NoPodsFoundError
 class ResponseBase:
     def __init__(self, request, body):
         self.request = request
-        self.resource = request.resource
-        self.manager = request.manager
+        self._resource = request.resource
+        self._manager = request.manager
 
     @property
     def namespace(self):
@@ -15,7 +17,7 @@ class ResponseBase:
 
     def __repr__(self):
         class_name = type(self).__name__
-        resource_name = self.resource.__name__
+        resource_name = self._resource.__name__
         return f'{class_name}(resource: {resource_name})'
 
 
@@ -24,11 +26,23 @@ class ResponseText(ResponseBase):
         ResponseBase.__init__(self, request, body)
         self.body = body
 
+    @property
+    def streaming(self):
+        return isinstance(self.body, urllib3.response.HTTPResponse)
+
+    @property
+    def text(self):
+        if self.streaming:
+            return self.body.read().strip()
+        return self.body.strip()
+
     def __iter__(self):
-        return iter(self.body.splitlines())
+        if self.streaming:
+            return iter(self.body.stream())
+        return iter(self.text.splitlines())
 
     def __len__(self):
-        return len(self.body.splitlines())
+        return len(self.text.splitlines())
 
 
 class ResponseJSON(ResponseBase):
@@ -39,24 +53,21 @@ class ResponseJSON(ResponseBase):
         ResponseBase.__init__(self, request, body)
         if body:
             self.raw = body
-            if hasattr(body, 'items'):
-                if not body.items:
-                    raise NoPodsFoundError('No pods found matching criteria!')
-                self.body = body.items
+            if isinstance(body, dict):
+                if 'items' in body:
+                    body = body['items']
+            elif hasattr(body, 'items'):
+                body = body.items or []
             else:
-                self.body = [body]
+                body = [body]
 
-            for name in self.transforms:
-                transform = transforms.TransformBase.transform_for(name)
+            if not len(body):
+                raise NoPodsFoundError('No pods found matching criteria!')
+            self.body = body
+
+            for name in self._resource._transforms:
+                transform = transforms.TransformBase.get_transform(name)
                 transform(self).apply()
-
-    @property
-    def transforms(self):
-        transforms_ = list(TRANSFORMS_DEFAULT)
-        transforms_.append('MissingFieldCopier')
-        if getattr(self.resource, '_transforms', None):
-            transforms_.extend(list(self.resource._transforms))
-        return transforms_
 
     def first(self, count=1):
         if count == 1:
@@ -65,15 +76,3 @@ class ResponseJSON(ResponseBase):
 
     def all(self):
         return self.body
-
-    def watch(self, version=None, timeout=None):
-        kwargs = dict()
-        if version:
-            kwargs['resource_version'] = version
-        if timeout:
-            kwargs['timeout_seconds'] = timeout
-
-        request = self.request
-        request.params._watched = True
-        request.params.params.update(kwargs)
-        return request.execute()

@@ -2,15 +2,16 @@
 
 [todo] replace checks for _namespaced with issubclass(obj, Namespaced)
 """
+from datetime import timedelta
 
 from . import util
 from .bases import APIObjectBase
 from .groups import (
-    CoreApiGroup,
-    ExtensionsApiGroup,
-    AppsApiGroup,
-    BatchApiGroup,
-    ApiextensionsApiGroup
+    CoreAPIGroup,
+    ExtensionsAPIGroup,
+    AppsAPIGroup,
+    BatchAPIGroup,
+    APIextensionsAPIGroup
 )
 from .properties import (
     Namespaced,
@@ -25,15 +26,17 @@ from .properties import (
 from ... import rest
 
 
-class Pod(Namespaced, Phased, APIObjectBase, CoreApiGroup):
+class Pod(Namespaced, Phased, APIObjectBase, CoreAPIGroup):
     def exec(self, command=None, container=None, shell=None, interactive=False,
             tty=False, **kwargs):
-
-        kwargs['stream'] = True
+        container = container or self.spec.containers[0].name
         # [fixme] even though stdout by default is True, this is required to
         #         make exec work properly.
         # INFO: this kwarg itself isn't required, but one of stdout,
         #       stderr, or stdin set to True is.  Investigate later
+        # edit: this if fixed here:
+        #   https://github.com/kubernetes-client/python-base/pull/35/files
+        # but not in the latest version of the python client yet
         if all([not kwargs.get('stdout'),
                 not kwargs.get('stderr'),
                 not kwargs.get('stdin')]):
@@ -44,18 +47,18 @@ class Pod(Namespaced, Phased, APIObjectBase, CoreApiGroup):
         if tty:
             kwargs['tty'] = True
 
-        request = rest.request(
+        request = rest.StreamRequest(
             self._manager.clone(),
             'exec',
             name=self.name,
             namespace=self.namespace,
             command=util.shlex(command, shell),
+            container=container,
             **kwargs
         )
         return request.execute()
 
-    # [todo] make follow=True work with streaming
-    def logs(self, container=None, follow=None, since=None, tail=None,
+    def logs(self, container=None, follow=False, since=None, tail=None,
              previous=False, **kwargs):
         """Returns logs from the attached pod.
 
@@ -68,28 +71,30 @@ class Pod(Namespaced, Phased, APIObjectBase, CoreApiGroup):
 
         [todo] implement streaming logs with follow=True
         """
-        # if follow:
-        #     kwargs['stream'] = True
-        #     kwargs['_preload_content'] = False
-        #     kwargs['follow'] = True
+        container = container or self.spec.containers[0].name
+        if follow:
+            kwargs['_preload_content'] = False
         if since:
-            kwargs['since_seconds'] = round(since.total_seconds())
+            if isinstance(since, timedelta):
+                since = round(since.total_seconds())
+            kwargs['since_seconds'] = since
         if tail:
             kwargs['tail_lines'] = tail
 
-        request = rest.request(
+        request = rest.Request(
             self._manager.clone(),
             'logs',
             name=self.name,
             namespace=self.namespace,
             container=container,
             previous=previous,
+            follow=follow,
             **kwargs
         )
         return request.execute()
 
 
-class Node(APIObjectBase, CoreApiGroup):
+class Node(APIObjectBase, CoreAPIGroup):
     @property
     def ready(self):
         for condition in self.status.conditions:
@@ -116,15 +121,15 @@ class Node(APIObjectBase, CoreApiGroup):
         self.reload()
 
 
-class ConfigMap(Namespaced, Configuration, APIObjectBase, CoreApiGroup):
+class ConfigMap(Namespaced, Configuration, APIObjectBase, CoreAPIGroup):
     pass
 
 
-class Secret(Namespaced, Configuration, Encoded, APIObjectBase, CoreApiGroup):
-    _transforms = ('B64TranslateMap',)
+class Secret(Namespaced, Configuration, Encoded, APIObjectBase, CoreAPIGroup):
+    _transforms = APIObjectBase._transforms + ('B64TranslateMap',)
 
 
-class Endpoints(Namespaced, APIObjectBase, CoreApiGroup):
+class Endpoints(Namespaced, APIObjectBase, CoreAPIGroup):
     @property
     def _addresses(self):
         return [address for address in self.subsets[0].addresses]
@@ -149,33 +154,31 @@ class Endpoints(Namespaced, APIObjectBase, CoreApiGroup):
             manager = self._manager.client.manager_for(kind)
             objects.append(manager.get(name=name, namespace=namespace).first())
         return objects
-        # return [pods_manager.get(name=name, namespace=namespace).first()
-        #         for name, namespace in self._targets]
 
 
-class Service(Namespaced, Selecting, APIObjectBase, CoreApiGroup):
+class Service(Namespaced, Selecting, APIObjectBase, CoreAPIGroup):
     @property
     def type(self):
         return self.spec.type
 
 
 class ReplicaSet(Namespaced, Replicating, Selecting, APIObjectBase,
-                 ExtensionsApiGroup):
+                 ExtensionsAPIGroup):
     pass
 
 
 class Deployment(Namespaced, Replicating, Selecting, APIObjectBase,
-                 ExtensionsApiGroup):
+                 ExtensionsAPIGroup):
     pass
 
 
 class StatefulSet(Namespaced, Replicating, Selecting, APIObjectBase,
-                  AppsApiGroup):
+                  AppsAPIGroup):
     pass
 
 
 class DaemonSet(Namespaced, Replicating, Selecting, APIObjectBase,
-                ExtensionsApiGroup):
+                ExtensionsAPIGroup):
     @property
     def ready(self):
         return all([
@@ -184,15 +187,15 @@ class DaemonSet(Namespaced, Replicating, Selecting, APIObjectBase,
         )
 
 
-class Ingress(Namespaced, APIObjectBase, ExtensionsApiGroup):
+class Ingress(Namespaced, APIObjectBase, ExtensionsAPIGroup):
     pass
 
 
-class Namespace(APIObjectBase, CoreApiGroup):
+class Namespace(APIObjectBase, CoreAPIGroup):
     pass
 
 
-class Job(Namespaced, Selecting, APIObjectBase, BatchApiGroup):
+class Job(Namespaced, Selecting, APIObjectBase, BatchAPIGroup):
     @property
     def complete(self):
         for condition in self.status.conditions:
@@ -205,7 +208,11 @@ class Job(Namespaced, Selecting, APIObjectBase, BatchApiGroup):
         return self.status.succeeded >= len(self.spec.template.spec.containers)
 
 
-class PersistentVolume(Storage, Bindable, APIObjectBase, CoreApiGroup):
+class CronJob(Namespaced, Selecting, APIObjectBase, BatchAPIGroup):
+    pass
+
+
+class PersistentVolume(Storage, Bindable, APIObjectBase, CoreAPIGroup):
     @property
     def claim(self):
         ref = self.spec.claim_ref
@@ -215,16 +222,16 @@ class PersistentVolume(Storage, Bindable, APIObjectBase, CoreApiGroup):
 
 
 class PersistentVolumeClaim(Namespaced, Storage, Bindable, APIObjectBase,
-                            CoreApiGroup):
+                            CoreAPIGroup):
     @property
     def volume(self):
         manager = self._manager.client.manager_for('PersistentVolume')
         return manager.get(name=self.spec.volume_name).first()
 
 
-class ServiceAccount(Namespaced, APIObjectBase, CoreApiGroup):
+class ServiceAccount(Namespaced, APIObjectBase, CoreAPIGroup):
     pass
 
 
-class CustomResourceDefinition(APIObjectBase, ApiextensionsApiGroup):
+class CustomResourceDefinition(APIObjectBase, APIextensionsAPIGroup):
     pass

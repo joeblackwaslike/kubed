@@ -1,21 +1,26 @@
-import kubernetes
+class APIGroupBase:
+    pass
 
 
-class CoreApiGroup:
+class CoreAPIGroup(APIGroupBase):
     _api_group = 'core'
 
 
-class ExtensionsApiGroup:
+class ExtensionsAPIGroup(APIGroupBase):
     _api_group = 'extensions'
 
 
-class AppsApiGroup:
+class AppsAPIGroup(APIGroupBase):
     _api_group = 'apps'
 
 
-class BatchApiGroup:
+class BatchAPIGroup(APIGroupBase):
     _api_group = 'batch'
 
 
-class ApiextensionsApiGroup:
+class APIextensionsAPIGroup(APIGroupBase):
     _api_group = 'apiextensions.k8s.io'
+
+
+class CustomAPIGroupBase(APIGroupBase):
+    pass

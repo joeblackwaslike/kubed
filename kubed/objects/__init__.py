@@ -1,4 +1,4 @@
-from . import api, manager, leader
+from . import api, manager
 from .manager import _APIObjectManager
 from .api.bases import APIObjectBase
 from .api.resources import (
@@ -15,6 +15,7 @@ from .api.resources import (
     StatefulSet,
     DaemonSet,
     Job,
+    CronJob,
     PersistentVolume,
     PersistentVolumeClaim,
     ServiceAccount,

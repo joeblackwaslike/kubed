@@ -7,30 +7,11 @@ from .context import ClientContext
 from .. import objects
 from ..meta import pattern
 from ..objects.manager import _APIObjectManager
-
-
-# class _KubeAPIs(pattern.WrappedMap):
-#     """Kubernetes API objects wrapper
-#
-#     A facade class that attempts to wrap the numerous (and often irrelavent)
-#     Kubernetes API classes and return only the correct one after sacrificing
-#     a dozen goats to the k8s god.
-#
-#     [todo] add multiple version support using preferred versions
-#     """
-#
-#     def __init__(self, client):
-#         self.client = client
-#         self._wrapped = {
-#             'core': kubernetes.client.CoreV1Api(client),
-#             'extensions': kubernetes.client.ExtensionsV1beta1Api(client),
-#             'apps': kubernetes.client.AppsV1beta1Api(client),
-#             'batch': kubernetes.client.BatchV1Api(client),
-#         }
-
+from ..objects.api.bases import CustomObjectBase
 
 
 class APIClient(pattern.Proxy):
+    # _custom_objects = dict()
     def __init__(self, context=None, **kwargs):
         client_context = context or ClientContext(**kwargs)
         pattern.Proxy.__init__(self, client_context.client)
@@ -42,20 +23,17 @@ class APIClient(pattern.Proxy):
         self.namespaces = _APIObjectManager(self, objects.Namespace)
         self.nodes = _APIObjectManager(self, objects.Node)
         self.pods = _APIObjectManager(self, objects.Pod)
-
         self.config_maps = _APIObjectManager(self, objects.ConfigMap)
         self.secrets = _APIObjectManager(self, objects.Secret)
-
         self.endpoints = _APIObjectManager(self, objects.Endpoints)
         self.services = _APIObjectManager(self, objects.Service)
         self.ingresses = _APIObjectManager(self, objects.Ingress)
-
         self.replica_sets = _APIObjectManager(self, objects.ReplicaSet)
         self.daemon_sets = _APIObjectManager(self, objects.DaemonSet)
         self.deployments = _APIObjectManager(self, objects.Deployment)
         self.stateful_sets = _APIObjectManager(self, objects.StatefulSet)
-
         self.jobs = _APIObjectManager(self, objects.Job)
+        self.cron_jobs = _APIObjectManager(self, objects.Job)
         self.persistent_volumes = _APIObjectManager(
             self, objects.PersistentVolume)
         self.persistent_volume_claims = _APIObjectManager(
@@ -64,11 +42,22 @@ class APIClient(pattern.Proxy):
         self.custom_resource_definitions = _APIObjectManager(
             self, objects.CustomResourceDefinition)
 
+        # for key, val in self._custom_objects.items():
+        #     setattr(self, key, _APIObjectManager(self, val))
+
+        for name, class_ in CustomObjectBase.custom_objects():
+            setattr(self, name, _APIObjectManager(self, class_))
+
+
+    @classmethod
+    def register_custom_object(self, plural, resource):
+        self._custom_objects[plural] = resource
+
     def clone(self):
         return type(self)(context=self._context)
 
     def manager_for(self, kind):
-        return  _APIObjectManager.manager_for(self, kind)
+        return _APIObjectManager.manager_for(self, kind)
 
     def api_for(self, resource):
         return self._apis[resource._api_group]

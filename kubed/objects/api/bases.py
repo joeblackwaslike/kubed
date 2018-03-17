@@ -9,6 +9,7 @@ from ...exceptions import ResourceVersionConflictError
 
 class APIObjectBase(pattern.Proxy):
     _namespaced = False
+    _transforms = ('ResourceWrapper', 'MissingFieldCopier')
     def __init__(self, manager, obj):
         pattern.Proxy.__init__(self, obj)
         self._manager = manager
@@ -39,7 +40,7 @@ class APIObjectBase(pattern.Proxy):
             resource_version = kwargs.pop('resource_version')
             # important to use resourceVersion not resource_version here
             data['metadata']['resourceVersion'] = str(resource_version)
-        request = rest.request(
+        request = rest.Request(
             self._manager.clone(),
             'patch',
             name=self.name,
@@ -77,7 +78,7 @@ class APIObjectBase(pattern.Proxy):
 
     # operates like: kubectl rolling-update, kubectl apply and kubectl replace
     def replace(self):
-        request = rest.request(
+        request = rest.Request(
             self._manager.clone(),
             'replace',
             name=self.name,
@@ -88,13 +89,10 @@ class APIObjectBase(pattern.Proxy):
         # [fixme] also see above
         self.__dict__.update(new.__dict__)
         return new
-    # aliases
-    update = replace
-    apply = replace
 
     # operates like: kubectl delete
     def delete(self, **options):
-        request = rest.request(
+        request = rest.Request(
             self._manager.clone(),
             'delete',
             name=self.name,
@@ -109,3 +107,15 @@ class APIObjectBase(pattern.Proxy):
         if self._namespaced:
             details += '/' + self.namespace
         return f'{class_name}({details})'
+
+
+class CustomObjectBase(APIObjectBase):
+    _transforms = ('CustomObjectWrapper',)
+    def __init__(self, manager, obj):
+        APIObjectBase.__init__(self, manager, obj)
+
+    @classmethod
+    def custom_objects(cls):
+        subclasses = cls.__subclasses__()
+        return {subclass._plural_name: subclass
+                for subclass in subclasses}.items()

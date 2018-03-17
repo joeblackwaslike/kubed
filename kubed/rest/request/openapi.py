@@ -3,9 +3,6 @@ from ..constants import NAMESPACE_DEFAULT, NAMESPACE_NONE
 from ... import strutil
 
 
-ARG_NAMES_WATCH = ('timeout_seconds', 'resource_version')
-ARG_NAMES_STREAM = ('timeout')
-
 API_ACTIONS_MAP = dict(
     get='list',
     get_by_name='read',
@@ -24,23 +21,16 @@ NAMESPACE_TEMPLATES = dict(
 )
 
 
-def method(*args, **kwargs):
-    return _RequestMethod(*args, **kwargs)
-
-
-def params(*args, **kwargs):
-    return _RequestParams(*args, **kwargs)
-
-
 class _RequestParams:
     """Builds all keyword parameters for executing an API Request.
     """
 
     def __init__(self, request, manager, namespace, **kwargs):
-        namespace = namespace or None
         if request.resource._namespaced:
             if namespace is NAMESPACE_DEFAULT:
                 namespace = manager.namespace
+        else:
+            namespace = None
         self.namespace = namespace
 
         self.name = kwargs.pop('name', None)
@@ -48,20 +38,6 @@ class _RequestParams:
         if self.selectors:
             for label, sel in self.selectors.items():
                 self.selectors[label] = selectors.RequestSelector(label, sel)
-
-        self._watched = kwargs.pop('watch', False)
-        if self.watched:
-            self.watch = {}
-            for name in ARG_NAMES_WATCH:
-                if name in kwargs:
-                    self.watch[name] = kwargs.pop(name)
-
-        self._streamed = kwargs.pop('stream', False)
-        if self.streamed:
-            self.stream = {}
-            for name in ARG_NAMES_STREAM:
-                if name in kwargs:
-                    self.stream[name] = kwargs.poo(name)
 
         self.params = kwargs
 
@@ -74,18 +50,6 @@ class _RequestParams:
             for sel in self.selectors.values():
                 params[sel.label] = sel.parameterize()
         return params
-
-    @property
-    def streamed(self):
-        return bool(self._streamed)
-
-    @property
-    def watched(self):
-        return bool(self._watched)
-
-    @property
-    def named(self):
-        return bool(self.name)
 
     @property
     def namespaced(self):
@@ -102,7 +66,7 @@ class _RequestMethod:
     def __init__(self, request, action, resource):
         self.request = request
         self.resource = resource
-        if action == 'get' and request.named:
+        if action == 'get' and request.by_name:
             action = 'get_by_name'
         self.action = action
 

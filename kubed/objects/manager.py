@@ -1,8 +1,8 @@
 from copy import copy
 
-from .. import rest
 from .api.bases import APIObjectBase
-from .. import strutil
+from .. import rest, strutil
+from ..rest.constants import NAMESPACE_DEFAULT
 
 
 class _APIObjectManager:
@@ -15,14 +15,13 @@ class _APIObjectManager:
     def namespace(self):
         return self.client.namespace
 
-    @classmethod
-    def manager_for(cls, kind):
+    def manager_for(self, kind):
         resource = APIObjectBase.resource_for(kind)
-        return cls(client, resource)
+        return type(self)(self.client, resource)
 
-    # kwargs: name, filters=dict(label={filter}, field={filter}), watch, resource_version
-    def get(self, namespace=None, **kwargs):
-        request = rest.request(
+    # kwargs: name, selectors=dict(label=dict(app='couchdb'), field={'metadata.name': 'couchdb'})
+    def get(self, namespace=NAMESPACE_DEFAULT, **kwargs):
+        request = rest.Request(
             self.clone(),
             'get',
             namespace=namespace,
@@ -30,12 +29,25 @@ class _APIObjectManager:
         )
         return request.execute()
 
-    def create(self, obj=None, namespace=None, **kwargs):
-        request = rest.request(
+    def create(self, obj=None, namespace=NAMESPACE_DEFAULT, **kwargs):
+        request = rest.Request(
             self.clone(),
             'create',
             namespace=namespace,
             body=obj,
+            **kwargs
+        )
+        return request.execute()
+
+    # same args as get above plus version and timeout
+    def watch(self, namespace=NAMESPACE_DEFAULT, resource_version=0,
+              timeout=None, **kwargs):
+        request = rest.WatchRequest(
+            self.clone(),
+            'get',
+            namespace=namespace,
+            resource_version=resource_version,
+            timeout=timeout,
             **kwargs
         )
         return request.execute()

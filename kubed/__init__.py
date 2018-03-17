@@ -17,7 +17,8 @@ __copyright__ = 'Copyright 2017 Joe Black'
 
 from . import patch
 
-patch.fix_api_group_null_value()
+# monkeypatch a few things broken with the api generated code
+patch.apply_all()
 
 from . import strutil, exceptions, meta, client, objects, rest
 from .client import ClientContext, APIClient

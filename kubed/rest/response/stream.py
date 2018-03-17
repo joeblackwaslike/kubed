@@ -14,9 +14,10 @@ import time
 import kubernetes
 
 from . import base
+from ...meta.decorators import lazy_property
 
 
-RESPONSE_TIMEOUT_DEFAULT = 3
+_RESPONSE_TIMEOUT_DEFAULT = 3
 
 
 class StreamResponseBase(base.ResponseBase):
@@ -24,55 +25,59 @@ class StreamResponseBase(base.ResponseBase):
     """
     def __init__(self, request, response, **kwargs):
         base.ResponseBase.__init__(self, request, response)
-        self.params = kwargs
+        self._params = kwargs
 
 
 class StreamResponseText(base.ResponseText):
     def __init__(self, request, response, **kwargs):
         base.ResponseText.__init__(self, request, response)
-        self.params = kwargs
+        self._params = kwargs
 
 
 class StreamResponseJSON(base.ResponseJSON):
     def __init__(self, request, response, **kwargs):
         base.ResponseJSON.__init__(self, request, response)
-        self.params = kwargs
+        self._params = kwargs
 
 
 class StreamResponseExec(StreamResponseText):
     def __init__(self, request, response, **kwargs):
         StreamResponseText.__init__(self, request, response, **kwargs)
 
+    @lazy_property
+    def text(self):
+        return self.body.strip()
+
     @property
     def interactive(self):
         return False
 
-    @property
-    def terminal(self):
-        return bool(self.params.get('tty', False))
+    @lazy_property
+    def tty(self):
+        return bool(self._params.get('tty'))
 
 
 class StreamResponseInteractiveExec(StreamResponseExec):
     def __init__(self, request, streamer, **kwargs):
         StreamResponseExec.__init__(self, request, None, **kwargs)
-        self.streamer = streamer
+        self._streamer = streamer
 
     @property
     def interactive(self):
         return True
 
     def close(self):
-        self.streamer.close()
+        self._streamer.close()
 
-    def execute(self, command, timeout=RESPONSE_TIMEOUT_DEFAULT):
-        if not self.streamer.is_open():
+    def execute(self, command, timeout=_RESPONSE_TIMEOUT_DEFAULT):
+        if not self._streamer.is_open():
             # [todo] make custom error type for this
-            raise RuntimeError('Stream: %s is not open', self.streamer)
-        self.streamer.write_stdin(command + '\n')
-        while not self.streamer.peek_stdout() or self.streamer.peek_stderr():
+            raise RuntimeError('Stream: %s is not open', self._streamer)
+        self._streamer.write_stdin(command + '\n')
+        while not self._streamer.peek_stdout() or self._streamer.peek_stderr():
             time.sleep(1)
 
         return (
-            self.streamer.read_stdout(timeout=timeout),
-            self.streamer.read_stderr(timeout=timeout)
+            self._streamer.read_stdout(timeout=timeout),
+            self._streamer.read_stderr(timeout=timeout)
         )

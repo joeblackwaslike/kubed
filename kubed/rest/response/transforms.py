@@ -7,7 +7,7 @@ class TransformBase:
         self.response = response
 
     @classmethod
-    def transform_for(self, name):
+    def get_transform(self, name):
         for subclass in self.__subclasses__():
             if subclass.__name__ == name:
                 return subclass
@@ -23,7 +23,7 @@ class TransformBase:
 class MissingFieldCopier(TransformBase):
     def operation(self, obj):
         if not obj.kind:
-            obj.kind = self.response.resource.__name__
+            obj.kind = self.response._resource.__name__
         if not obj.api_version:
             obj.api_version = self.response.raw.api_version
         return obj
@@ -32,7 +32,18 @@ class MissingFieldCopier(TransformBase):
 class ResourceWrapper(TransformBase):
     def operation(self, obj):
         if not isinstance(obj, objects.APIObjectBase):
-            return self.response.resource(self.response.manager, obj)
+            return self.response._resource(self.response._manager, obj)
+
+
+class CustomObjectWrapper(TransformBase):
+    def apply(self):
+        self.response.body
+
+    def operation(self, obj):
+        import pdb; pdb.set_trace()
+        obj = pattern.AttrDict(obj)
+
+        return self.response._resource(self.response._manager, obj)
 
 
 class B64TranslateMap(TransformBase):
